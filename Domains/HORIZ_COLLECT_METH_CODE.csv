@@ -1,0 +1,39 @@
+Code,Desc
+001,Address Matching-House Number
+002,Address Matching-Block Face
+003,Address Matching-Street Centerline
+004,Address Matching-Nearest Intersection
+005,Address Matching-Primary Name
+006,Address Matching-Digitized
+007,Address Matching-Other
+008,Census Block-1990-Centroid
+009,Census Block/Group-1990-Centroid
+010,Census Block/Tract-1990-Centroid
+011,Census-Other
+012,GPS Carrier Phase Static Relative Position
+013,GPS Carrier Phase Kinematic Relative Position
+014,GPS Code (Pseudo Range) Differential
+015,GPS Code (Pseudo Range) Precise Position
+016,GPS Code (Pseudo Range) Standard Position (SA Off)
+017,GPS Code (Pseudo Range) Standard Position (SA On)
+018,Interpolation-Map
+019,Interpolation-Photo
+020,Interpolation-Satellite
+021,Interpolation-Other
+022,Loran C
+023,Public Land Survey-Quarter Section
+024,Public Land Survey-Section
+025,Classical Surveying Techniques
+026,ZIP Code-Centroid
+027,Unknown
+028,GPS-Unspecified
+029,"GPS, with Canadian Active Control System"
+030,Interpolation-Digital Map Source (TIGER)
+031,Interpolation-SPOT
+032,Interpolation-MSS
+033,Interpolation-TM
+034,Public Land Survey-Eighth Section
+035,Public Land Survey-Sixteenth Section
+036,Public Land Survey-Footing
+037,ZIP+4 Centroid
+038,ZIP+2 Centroid
