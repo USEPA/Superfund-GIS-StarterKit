@@ -188,7 +188,7 @@ class UpdateSEMSTool(object):
                         val = str(val) + ' ' + str(data[semsFields[1]])
 
                 #field might be limited string field. just clip off any characters over limt
-                if val and featureField in self.featureFieldLengths and len(val) > self.featureFieldLengths[featureField]:
+                if val and featureField in self.featureFieldLengths and isinstance(val, str) and len(val) > self.featureFieldLengths[featureField]:
                     val = val[:self.featureFieldLengths[featureField]]
 
                 if (row[rowindex] != val):
