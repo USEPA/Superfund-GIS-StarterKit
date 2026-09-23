@@ -44,7 +44,7 @@ class UpdateSEMSTool(object):
             'NPL_STATUS_CODE': ['nplstatuscode'],
             'FEDERAL_FACILITY_DETER_CODE': ['federalfacilityindicator'],
             'URL_ALIAS_TXT': ['friendly_url'],
-            'SITE_ID':['siteId'],
+            'SITE_ID':['siteId']
         }
         self.featureFieldLengths = {}
 
@@ -68,7 +68,7 @@ class UpdateSEMSTool(object):
              'SITE_ID',
              'REGION_CODE']
 
-        #This to translate JSON API fields to arc table fields
+        # This to translate JSON API fields to arc table fields
         
         self.contactTransform = {
             'firstname':'contactFirstName',
@@ -143,7 +143,7 @@ class UpdateSEMSTool(object):
                     if noFieldToUpdate == True:
                         parameters[0].setErrorMessage("No fields to update for " + fc)
         return
-    
+            
     def updateFeatureClass(self, fc, data):
         # Updates the feature class using the API response.
         workspace = arcpy.Describe(fc).path
@@ -309,8 +309,8 @@ class UpdateSEMSTool(object):
                     rownum = 0
                     for row in cursor:
                         rownum += 1
-                        if row[0]:
-                            stateCode = row[0][:2]
+                        try:
+                            stateCode = row[0].strip()[:2]
                             regionLookup = [k for k,v in self.regionLookup.items() if stateCode in v][0]
                             regionEpaId = regionLookup + '/' + row[0]
                             if regionEpaId in featuresToSitesMap:
@@ -318,22 +318,22 @@ class UpdateSEMSTool(object):
                                     featuresToSitesMap[regionEpaId].append(fc)
                             else:
                                 featuresToSitesMap[regionEpaId] = [fc]
-                        else:
-                            arcpy.AddMessage("The site in row {} is missing EPA ID values required for SEMS API query and will not be updated".format(rownum))
+                        except:
+                            arcpy.AddMessage(f"The site in row {rownum} is missing EPA ID values required for SEMS API query and will not be updated")
 
             siteCount=0
 
             for site in list(featuresToSitesMap.keys()):
                 #for testing just one site
                 # if not site == '07/MOD098633415': continue
-                arcpy.AddMessage(str(datetime.datetime.now()) + " Querying API for site details https://semspub.epa.gov/src/sitedetails/" + site)
+                arcpy.AddMessage(f"{datetime.datetime.now()} Querying API for site details https://semspub.epa.gov/src/sitedetails/{site}")
 
-                response = requests.get(url + site,headers=headers)
 
                 try:
+                    response = requests.get(url + site,headers=headers                             
                     semsResponse = json.loads(response.content)
                 except:
-                    arcpy.AddWarning('site = {} could not be retrieved from the SEMS API. The response was : {}'.format(site,response.content))
+                    arcpy.AddWarning(f'site = {site} could not be retrieved from the SEMS API. The response was : {response.content}')
 
                     continue
 
