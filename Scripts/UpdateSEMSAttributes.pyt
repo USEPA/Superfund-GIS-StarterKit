@@ -101,6 +101,14 @@ class UpdateSEMSTool(object):
         has been changed."""
         return
 
+    def getFeatureToSemsfieldMap(self, fc):
+        listedFCFieldNames = {field.name.upper(): field.name for field in arcpy.ListFields(fc)}
+        return {
+            listedFCFieldNames[canonicalFieldName]: semsFields
+            for canonicalFieldName, semsFields in self.featureToSemsfieldMap.items()
+            if canonicalFieldName in listedFCFieldNames
+        }
+
     def updateMessages(self, parameters):
         # Validation routine - checks to make sure that the lookup fields (EPA_ID) are present
         # and that at least one other field is present to update.
@@ -121,12 +129,10 @@ class UpdateSEMSTool(object):
                     parameters[0].setErrorMessage("The following required field(s): " + missingEssentialFields + " do not exist in " + fc)
                 else:
                     noFieldToUpdate = True
-                    for fieldTobeUpdated in list(self.featureToSemsfieldMap.keys()):
-                        if (fieldTobeUpdated in listedFCFieldNames.keys()):
+                    featureToSemsfieldMap = self.getFeatureToSemsfieldMap(fc)
+                    for fieldTobeUpdated in featureToSemsfieldMap:
+                        if fieldTobeUpdated.upper() not in self.SemsfieldRequired:
                             noFieldToUpdate = False
-                            # Resolve case sensitivity issues between SEMS field names and feature class field names
-                            if listedFCFieldNames[fieldTobeUpdated] != fieldTobeUpdated:
-                                self.featureToSemsfieldMap[listedFCFieldNames[fieldTobeUpdated]] = self.featureToSemsfieldMap.pop(fieldTobeUpdated)
                             
                     if noFieldToUpdate == True:
                         parameters[0].setErrorMessage("No fields to update for " + fc)
@@ -134,6 +140,17 @@ class UpdateSEMSTool(object):
 
     def updateFeatureClass(self, fc, data):
         # Updates the feature class using the API response.
+        featureToSemsfieldMap = self.getFeatureToSemsfieldMap(fc)
+        featureFields = list(featureToSemsfieldMap.keys())
+        featureEpaIdFieldName = next(
+            featureField for featureField, semsFields in featureToSemsfieldMap.items()
+            if self.semsEpaIdFieldName in semsFields
+        )
+        featureFieldLengths = {
+            field.name: field.length
+            for field in arcpy.ListFields(fc)
+            if field.name in featureFields and field.type.lower() == 'string'
+        }
         workspace = arcpy.Describe(fc).path
         editing = False
         try:
@@ -152,8 +169,8 @@ class UpdateSEMSTool(object):
         #paddedRegion = str(data[self.semsRegionFieldName])
         #expression = self.featureRegionFieldName + " IN ('" + regionInteger + "', '" + paddedRegion +  "') AND " + self.featureEpaIdFieldName + " = '" + data[self.semsEpaIdFieldName] + "'"
         #expression = "{} IN ('{}', '{}') AND {} = '{}'".format(self.featureRegionFieldName, regionInteger, paddedRegion, self.featureEpaIdFieldName, self.semsEpaIdFieldName)
-        expression = self.featureEpaIdFieldName + " = '" + data[self.semsEpaIdFieldName] + "'"
-        cursor = arcpy.da.UpdateCursor(fc, self.featureFields, expression)
+        expression = featureEpaIdFieldName + " = '" + data[self.semsEpaIdFieldName] + "'"
+        cursor = arcpy.da.UpdateCursor(fc, featureFields, expression)
 
         # Track whether any edits were made - if none, then all attribute data in the feature class matched the API for this site.
         rowUpdated = False
@@ -161,9 +178,9 @@ class UpdateSEMSTool(object):
         for row in cursor:
             rowindex = -1
             this_id = ""
-            for featureField in self.featureFields:
+            for featureField in featureFields:
                 rowindex = rowindex + 1
-                semsFields = self.featureToSemsfieldMap[featureField]
+                semsFields = featureToSemsfieldMap[featureField]
                 # Allows for mapping two SEMS fields to one Feature Class field (Contact Name)
                 firstSemsField = semsFields[0]
                 #if region field or epa id field we don't need to update
@@ -180,8 +197,8 @@ class UpdateSEMSTool(object):
                         val = str(val) + ' ' + str(data[semsFields[1]])
 
                 #field might be limited string field. just clip off any characters over limt
-                if val and featureField in self.featureFieldLengths and len(val) > self.featureFieldLengths[featureField]:
-                    val = val[:self.featureFieldLengths[featureField]]
+                if isinstance(val, str) and featureField in featureFieldLengths and len(val) > featureFieldLengths[featureField]:
+                    val = val[:featureFieldLengths[featureField]]
 
                 if (str(row[rowindex]).lower() != str(val).lower()):
                     rowUpdated = True
@@ -257,24 +274,9 @@ class UpdateSEMSTool(object):
 
             fcList = parameters[0].valueAsText.replace("'","").split(";")
 
-            self.featureFields = list(self.featureToSemsfieldMap.keys())
-
-            #sometimes need to map backwards
-            semsToFeatureFieldMap = {}
-
             arcpy.AddMessage("Mapping Fields")
 
-            for featureField in self.featureFields:
-                semsFields = self.featureToSemsfieldMap[featureField]
-                #can't reverse map feature fields that are made up of multiple sems fields
-                if len(semsFields)!=1: continue
-
-                semsToFeatureFieldMap[semsFields[0]] = featureField
-
             arcpy.AddMessage("Fields Mapped, setting domains.")
-
-            self.featureRegionFieldName = semsToFeatureFieldMap[self.semsRegionFieldName]
-            self.featureEpaIdFieldName = semsToFeatureFieldMap[self.semsEpaIdFieldName]
 
             #was testing this to figure out how they used to use codes instead of text for npl status
             #but now sems api is returning text instead of code so we don't need to use it anymore
@@ -284,7 +286,6 @@ class UpdateSEMSTool(object):
                 if descPath.dataType == 'FeatureDataset':
                     FGDB_WKPS = descPath.path
             domainsList = arcpy.da.ListDomains(FGDB_WKPS)
-            self.featureFieldLengths = {}
 
             arcpy.AddMessage("Domains Set, gathering unique sites")
             #----- Extract data from SEMS via JSON service -----
@@ -303,11 +304,12 @@ class UpdateSEMSTool(object):
                 noSEMSTracker[fc] = []
                 #Get feature field lengths if string
                 listedFCfields = arcpy.ListFields(fc)
-                self.featureFieldLengths = {}
-                for fcField in listedFCfields:
-                    if fcField.name in self.featureFields and fcField.type.lower() == 'string' :
-                        self.featureFieldLengths[fcField.name] = fcField.length
-                with arcpy.da.SearchCursor(fc,[self.featureEpaIdFieldName]) as cursor:
+                featureToSemsfieldMap = self.getFeatureToSemsfieldMap(fc)
+                featureEpaIdFieldName = next(
+                    featureField for featureField, semsFields in featureToSemsfieldMap.items()
+                    if self.semsEpaIdFieldName in semsFields
+                )
+                with arcpy.da.SearchCursor(fc, [featureEpaIdFieldName]) as cursor:
                     rownum = 0
                     for row in cursor:
                         rownum += 1
@@ -347,7 +349,8 @@ class UpdateSEMSTool(object):
                     errormsg = f"Error: {e}"
                 if errormsg:
                     arcpy.AddWarning(f'site = {site} could not be retrieved from the SEMS API. The response was : {errormsg}')
-                    noSEMSTracker[fc].append(site)
+                    for fc in featuresToSitesMap[site]:
+                        noSEMSTracker[fc].append(site)
                     continue
 
                 siteCount += 1
